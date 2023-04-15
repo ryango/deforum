@@ -38,9 +38,10 @@ from modules import lowvram, devices, sd_hijack
 from .ZoeDepth import ZoeDepth
 import torch
 
+frames = {}
 def render_animation(args, anim_args, video_args, parseq_args, loop_args, controlnet_args, animation_prompts, root):
     DEBUG_MODE = opts.data.get("deforum_debug_mode_enabled", False)
-
+    frames = {}
     if opts.data.get("deforum_save_gen_info_as_srt"): # create .srt file and set timeframe mechanism using FPS
         srt_filename = os.path.join(args.outdir, f"{args.timestring}.srt")
         srt_frame_duration = init_srt_file(srt_filename, video_args.fps)
@@ -614,7 +615,18 @@ def render_animation(args, anim_args, video_args, parseq_args, loop_args, contro
 
         state.current_image = image
 
+        blendSteps = 20
         args.seed = next_seed(args)
+        if frame_idx <= blendSteps:            
+            frames[frame_idx] = prev_img
+            print(f"saving {frame_idx}")
+        elif frame_idx > anim_args.max_frames - blendSteps and frame_idx < anim_args.max_frames:
+            blendStep = blendSteps - (anim_args.max_frames - frame_idx) # starts at 0 -> 20
+            alpha = blendStep / blendSteps # starts at 0 -> 1
+            beta = 1 - alpha # 1 -> 0
+            print(f"blending {frame_idx} {blendStep} {alpha}")
+            prev_img = cv2.addWeighted(prev_img, beta, frames[blendStep], alpha, 0)
+
         
     if predict_depths and not keep_in_vram:
         depth_model.delete_model()
