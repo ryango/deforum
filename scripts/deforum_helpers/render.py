@@ -38,6 +38,7 @@ from modules import lowvram, devices, sd_hijack
 from .ZoeDepth import ZoeDepth
 import torch
 
+blendSteps = 40
 def render_animation(args, anim_args, video_args, parseq_args, loop_args, controlnet_args, animation_prompts, root):
     DEBUG_MODE = opts.data.get("deforum_debug_mode_enabled", False)
     if opts.data.get("deforum_save_gen_info_as_srt"): # create .srt file and set timeframe mechanism using FPS
@@ -588,6 +589,15 @@ def render_animation(args, anim_args, video_args, parseq_args, loop_args, contro
         if not using_vid_init:
             prev_img = opencv_image
 
+        if frame_idx > anim_args.max_frames - blendSteps:
+            blendStep = blendSteps - (anim_args.max_frames - frame_idx) + 1 # starts at 0 -> 20
+            alpha = blendStep / blendSteps # starts at 0 -> 1
+            beta = 1 - alpha # 1 -> 0
+            filename = f"{args.timestring}_{blendStep:09}.png"
+            frame = cv2.imread(os.path.join(args.outdir, filename))
+            print(f"blending {frame_idx} {blendStep} {filename} {alpha}")
+            prev_img = opencv_image = cv2.addWeighted(opencv_image, beta, frame, alpha, 0)
+
         if turbo_steps > 1:
             turbo_prev_image, turbo_prev_frame_idx = turbo_next_image, turbo_next_frame_idx
             turbo_next_image, turbo_next_frame_idx = opencv_image, frame_idx
@@ -614,15 +624,6 @@ def render_animation(args, anim_args, video_args, parseq_args, loop_args, contro
         state.current_image = image
 
         args.seed = next_seed(args)
-        blendSteps = 20
-        if frame_idx > anim_args.max_frames - blendSteps:
-            blendStep = blendSteps - (anim_args.max_frames - frame_idx) # starts at 0 -> 20
-            alpha = blendStep / blendSteps # starts at 0 -> 1
-            beta = 1 - alpha # 1 -> 0
-            filename = f"{args.timestring}_{blendStep:09}.png"
-            frame = cv2.imread(os.path.join(args.outdir, filename))
-            print(f"blending {frame_idx} {blendStep} {filename} {frame} {alpha}")
-            prev_img = cv2.addWeighted(prev_img, beta, frame, alpha, 0)
 
         
     if predict_depths and not keep_in_vram:
